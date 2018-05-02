@@ -7,7 +7,8 @@ tag2label = {"O": 0,
              "B-LOC": 3, "I-LOC": 4,
              "B-ORG": 5, "I-ORG": 6,
              "B-COM": 7, "I-COM": 8,
-             "B-PRO": 9, "I-PRO": 10
+             "B-PRO": 9, "I-PRO": 10,
+             "B-MISC": 11, "I-MISC": 12
              }
 
 
@@ -99,6 +100,49 @@ def vocab_build(vocab_path, corpus_path, min_count):
         pickle.dump(word2id, fw)
 
 
+def vocab_build_en(vocab_path, corpus_path):
+    data = read_corpus(corpus_path)
+    word2id = {}
+    for sent_, tag_ in data:
+        for word in sent_:
+            word = word.lower()
+            if word.isdigit():
+                word = '<NUM>'
+            if word not in word2id:
+                word2id[word] = [len(word2id) + 1, 1]
+            else:
+                word2id[word][1] += 1
+
+    new_id = 1
+    for word in word2id.keys():
+        word2id[word] = new_id
+        new_id += 1
+    word2id['<UNK>'] = new_id
+    word2id['<PAD>'] = 0
+
+    print(len(word2id))
+    with open(vocab_path, 'wb') as fw:
+        pickle.dump(word2id, fw)
+
+
+def tag_dict_build(corpus_path):
+    print('reading tags..')
+    raw = read_corpus(corpus_path)
+    tag_set = set()
+    for _, tag_ in raw:
+        for tag in tag_:
+            tag_set.add(tag)
+    tag_dict = {}
+    new_id = 1
+    for tag in tag_set:
+        tag_dict[tag] = new_id
+        new_id += 1
+
+    print('tags dict: ', tag_dict)
+
+    return tag_dict
+
+
 def sentence2id(sent, word2id):
     """
     把一个句子中的汉子转换成id
@@ -112,6 +156,23 @@ def sentence2id(sent, word2id):
             word = '<NUM>'
         elif ('\u0041' <= word <= '\u005a') or ('\u0061' <= word <= '\u007a'):
             word = '<ENG>'
+        if word not in word2id:
+            word = '<UNK>'
+        sentence_id.append(word2id[word])
+    return sentence_id
+
+
+def sentence2id_en(sent, word2id):
+    """
+    把一个句子中的单词转换成id
+    :param sent:
+    :param word2id:
+    :return:
+    """
+    sentence_id = []
+    for word in sent:
+        if word.isdigit():
+            word = '<NUM>'
         if word not in word2id:
             word = '<UNK>'
         sentence_id.append(word2id[word])
@@ -160,7 +221,7 @@ def pad_sequences(sequences, pad_mark=0):
     return seq_list, seq_len_list
 
 
-def batch_yield(data, batch_size, vocab, tag2label, shuffle=False):
+def batch_yield(data, batch_size, vocab, tag2label, shuffle=False, lang=None):
     """
     一个迭代器 每次next 返回新的batch
     :param data:
@@ -173,7 +234,10 @@ def batch_yield(data, batch_size, vocab, tag2label, shuffle=False):
 
     seqs, labels = [], []
     for (sent_, tag_) in data:
-        sent_ = sentence2id(sent_, vocab)  # 把对应句子中的文字换成id
+        if lang == 'zh':
+            sent_ = sentence2id(sent_, vocab)  # 把对应句子中的文字换成id
+        elif lang == 'en':
+            sent_ = sentence2id_en(sent_, vocab) # 把对应句子中的单词换成id
         label_ = [tag2label[tag] for tag in tag_]  # 把对应句子中的标注换成字典中的数字
 
         if len(seqs) == batch_size:  # 够一个批次就yield
@@ -188,4 +252,16 @@ def batch_yield(data, batch_size, vocab, tag2label, shuffle=False):
 
 
 if __name__ == '__main__':
-    print(read_corpus_for_eval('data_path/test_data_fin')[1][0:2])
+    # vocab_build_en('word2id_en.pkl','train_data_en')
+    raw = read_corpus('train_data_en')
+    tag_set = set()
+    for _, tag_ in raw:
+        for tag in tag_:
+            tag_set.add(tag)
+    tag_dict = {}
+    new_id = 1
+    for tag in tag_set:
+        tag_dict[tag] = new_id
+        new_id += 1
+
+    print(tag_dict)

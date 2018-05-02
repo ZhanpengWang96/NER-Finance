@@ -3,8 +3,8 @@ import numpy as np
 import os, argparse, time
 from model import BiLSTM_CRF
 from utils import str2bool, get_logger, get_entity
-from data import read_corpus, read_dictionary, tag2label, random_embedding, read_corpus_for_eval
-
+from data import read_corpus, read_dictionary, random_embedding, read_corpus_for_eval, tag_dict_build
+from data import tag2label as tag2label_default
 
 ## Session configuration
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
@@ -12,7 +12,6 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # default: 0
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
 config.gpu_options.per_process_gpu_memory_fraction = 0.2  # need ~700MB GPU memory
-
 
 ## hyperparameters
 parser = argparse.ArgumentParser(description='BiLSTM-CRF for Chinese NER task')
@@ -27,36 +26,47 @@ parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
 parser.add_argument('--clip', type=float, default=5.0, help='gradient clipping')
 parser.add_argument('--dropout', type=float, default=0.5, help='dropout keep_prob')
 parser.add_argument('--update_embedding', type=str2bool, default=True, help='update embedding during training')
-parser.add_argument('--pretrain_embedding', type=str, default='random', help='use pretrained char embedding or init it randomly')
+parser.add_argument('--pretrain_embedding', type=str, default='random',
+                    help='use pretrained char embedding or init it randomly')
 parser.add_argument('--embedding_dim', type=int, default=300, help='random init char embedding_dim')
 parser.add_argument('--shuffle', type=str2bool, default=True, help='shuffle training data before each epoch')
 parser.add_argument('--mode', type=str, default='demo', help='train/test/demo/local_test')
 parser.add_argument('--demo_model', type=str, default='1521112368', help='model for test and demo')
+parser.add_argument('--lang', type=str, default='en', help='choose train/test language')
+parser.add_argument('--read_tags', type=str2bool, default=True, help='read tags from data set or use default tag dict')
 args = parser.parse_args()
 
-
 ## get char embeddings
-word2id = read_dictionary(os.path.join('.', args.train_data, 'word2id.pkl'))
-if args.pretrain_embedding == 'random':
-    embeddings = random_embedding(word2id, args.embedding_dim)
+if args.lang == 'zh':
+    word2id = read_dictionary(os.path.join('.', args.train_data, 'word2id.pkl'))
+    if args.pretrain_embedding == 'random':
+        embeddings = random_embedding(word2id, args.embedding_dim)
+    else:
+        embedding_path = 'pretrain_embedding.npy'
+        embeddings = np.array(np.load(embedding_path), dtype='float32')
 else:
-    embedding_path = 'pretrain_embedding.npy'
-    embeddings = np.array(np.load(embedding_path), dtype='float32')
+    word2id = read_dictionary(os.path.join('.', args.train_data, 'word2id_en.pkl'))
+    embeddings = random_embedding(word2id, args.embedding_dim)
 
+# define tags dictionary
+if args.read_tags:
+    tag2label = tag_dict_build(os.path.join('.', args.train_data, 'train_data_en'))
+else:
+    tag2label = tag2label_default
 
 ## read corpus and get training data
 if args.mode != 'demo':
-    train_path = os.path.join('.', args.train_data, 'train_data_fin')
-    test_path = os.path.join('.', args.test_data, 'test_data_fin')
+    train_path = os.path.join('.', args.train_data, 'train_data_en')
+    test_path = os.path.join('.', args.test_data, 'test_data_en')
     train_data = read_corpus(train_path)
-    test_data = read_corpus(test_path); test_size = len(test_data)
+    test_data = read_corpus(test_path);
+    test_size = len(test_data)
     _, test_data_raw = read_corpus_for_eval(test_path)
-
 
 ## paths setting
 paths = {}
 timestamp = str(int(time.time())) if args.mode == 'train' else args.demo_model
-output_path = os.path.join('.', args.train_data+"_save", timestamp)
+output_path = os.path.join('.', args.train_data + "_save", timestamp)
 if not os.path.exists(output_path): os.makedirs(output_path)
 summary_path = os.path.join(output_path, "summaries")
 paths['summary_path'] = summary_path
@@ -71,7 +81,6 @@ if not os.path.exists(result_path): os.makedirs(result_path)
 log_path = os.path.join(result_path, "log.txt")
 paths['log_path'] = log_path
 get_logger(log_path).info(str(args))
-
 
 ## training model
 if args.mode == 'train':
@@ -107,6 +116,8 @@ elif args.mode == 'local_test':
         saver.restore(sess, ckpt_file)
         print(model.evaluate_local(sess, test_data, test_data_raw))
 
+
+
 ## demo
 elif args.mode == 'demo':
     ckpt_file = tf.train.latest_checkpoint(model_path)
@@ -118,7 +129,7 @@ elif args.mode == 'demo':
     with tf.Session(config=config) as sess:
         print('============= demo =============')
         saver.restore(sess, ckpt_file)
-        while(1):
+        while (1):
             print('Please input your sentence:')
             demo_sent = input()
             if demo_sent == '' or demo_sent.isspace():
@@ -128,5 +139,5 @@ elif args.mode == 'demo':
                 demo_sent = list(demo_sent.strip())
                 demo_data = [(demo_sent, ['O'] * len(demo_sent))]
                 tag = model.demo_one(sess, demo_data)
-                PER, LOC, ORG , COM , PRO = get_entity(tag, demo_sent)
+                PER, LOC, ORG, COM, PRO = get_entity(tag, demo_sent)
                 print('PER: {}\nLOC: {}\nORG: {}\nCOM: {}\nPRO: {}'.format(PER, LOC, ORG, COM, PRO))

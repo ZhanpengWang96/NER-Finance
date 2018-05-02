@@ -42,6 +42,7 @@ class BiLSTM_CRF(object):
         self.num_tags = len(tag2label)
         self.vocab = vocab
         self.shuffle = args.shuffle
+        self.language = args.lang
         self.model_path = paths['model_path']
         self.summary_path = paths['summary_path']
         self.logger = get_logger(paths['log_path'])
@@ -193,7 +194,7 @@ class BiLSTM_CRF(object):
         :return:
         """
         label_list = []
-        for seqs, labels in batch_yield(sent, self.batch_size, self.vocab, self.tag2label, shuffle=False):
+        for seqs, labels in batch_yield(sent, self.batch_size, self.vocab, self.tag2label, shuffle=False, lang=self.language):
             label_list_, _ = self.predict_one_batch(sess, seqs)
             label_list.extend(label_list_)
         label2tag = {}
@@ -216,7 +217,7 @@ class BiLSTM_CRF(object):
         num_batches = (len(train) + self.batch_size - 1) // self.batch_size
 
         start_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-        batches = batch_yield(train, self.batch_size, self.vocab, self.tag2label, shuffle=self.shuffle)
+        batches = batch_yield(train, self.batch_size, self.vocab, self.tag2label, shuffle=self.shuffle, lang=self.language)
         for step, (seqs, labels) in enumerate(batches):  # 遍历这个迭代器
 
             sys.stdout.write(' processing: {} batch / {} batches.'.format(step + 1, num_batches) + '\r')
@@ -269,7 +270,7 @@ class BiLSTM_CRF(object):
         :return:
         """
         label_list, seq_len_list = [], []
-        for seqs, labels in batch_yield(dev, self.batch_size, self.vocab, self.tag2label, shuffle=False):
+        for seqs, labels in batch_yield(dev, self.batch_size, self.vocab, self.tag2label, shuffle=False, lang=self.language):
             label_list_, seq_len_list_ = self.predict_one_batch(sess, seqs)
             label_list.extend(label_list_)
             seq_len_list.extend(seq_len_list_)
@@ -330,7 +331,7 @@ class BiLSTM_CRF(object):
 
     def evaluate_local(self, sess, test_data, raw_data):
         label_list = []
-        for seqs, labels in batch_yield(raw_data, self.batch_size, self.vocab, self.tag2label, shuffle=False):
+        for seqs, labels in batch_yield(raw_data, self.batch_size, self.vocab, self.tag2label, shuffle=False, lang=self.language):
             label_list_, _ = self.predict_one_batch(sess, seqs)
             label_list.extend(label_list_)
 
@@ -342,11 +343,11 @@ class BiLSTM_CRF(object):
 
         for labels_pre, (_, lables_true) in zip(label_list, test_data):
             for pre_l, true_l in zip(labels_pre, lables_true):
-                # if pre_l != 0:
-                marked_pre += 1
-                # if self.tag2label[true_l] != 0:
-                marked_true += 1
-                if pre_l == self.tag2label[true_l] :
+                if pre_l != 0:
+                    marked_pre += 1
+                if self.tag2label[true_l] != 0:
+                    marked_true += 1
+                if pre_l == self.tag2label[true_l] and pre_l != 0:
                     marked_right += 1
 
         return marked_pre, marked_right, marked_true

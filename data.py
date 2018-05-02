@@ -133,7 +133,7 @@ def tag_dict_build(corpus_path):
         for tag in tag_:
             tag_set.add(tag)
     tag_dict = {}
-    new_id = 1
+    new_id = 0
     for tag in tag_set:
         tag_dict[tag] = new_id
         new_id += 1

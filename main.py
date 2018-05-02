@@ -51,6 +51,7 @@ else:
 # define tags dictionary
 if args.read_tags:
     tag2label = tag_dict_build(os.path.join('.', args.train_data, 'train_data_en'))
+    print(tag2label)
 else:
     tag2label = tag2label_default
 

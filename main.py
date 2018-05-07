@@ -2,9 +2,10 @@ import tensorflow as tf
 import numpy as np
 import os, argparse, time
 from model import BiLSTM_CRF
-from utils import str2bool, get_logger, get_entity
+from utils import str2bool, get_logger, get_entity, get_entity_of_one_type
 from data import read_corpus, read_dictionary, random_embedding, read_corpus_for_eval, tag_dict_build
 from data import tag2label as tag2label_default
+import pickle
 
 ## Session configuration
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
@@ -20,7 +21,7 @@ parser.add_argument('--test_data', type=str, default='data_path', help='test dat
 parser.add_argument('--batch_size', type=int, default=24, help='#sample of each minibatch')
 parser.add_argument('--epoch', type=int, default=30, help='#epoch of training')
 parser.add_argument('--hidden_dim', type=int, default=300, help='#dim of hidden state')
-parser.add_argument('--optimizer', type=str, default='Momentum', help='Adam/Adadelta/Adagrad/RMSProp/Momentum/SGD')
+parser.add_argument('--optimizer', type=str, default='Adam', help='Adam/Adadelta/Adagrad/RMSProp/Momentum/SGD')
 parser.add_argument('--CRF', type=str2bool, default=True, help='use CRF at the top layer. if False, use Softmax')
 parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
 parser.add_argument('--clip', type=float, default=5.0, help='gradient clipping')
@@ -32,7 +33,7 @@ parser.add_argument('--embedding_dim', type=int, default=300, help='random init 
 parser.add_argument('--shuffle', type=str2bool, default=True, help='shuffle training data before each epoch')
 parser.add_argument('--mode', type=str, default='demo', help='train/test/demo/local_test')
 parser.add_argument('--demo_model', type=str, default='1521112368', help='model for test and demo')
-parser.add_argument('--lang', type=str, default='en', help='choose train/test language')
+parser.add_argument('--lang', type=str, default='en', help='zh/en choose train/test language')
 parser.add_argument('--read_tags', type=str2bool, default=True, help='read tags from data set or use default tag dict')
 args = parser.parse_args()
 
@@ -50,21 +51,24 @@ else:
 
 # define tags dictionary
 if args.read_tags:
+    # change whlie changing dataset
     tag2label = tag_dict_build(os.path.join('.', args.train_data, 'train_data_en'))
-    print(tag2label)
+    # print(tag2label)
 else:
     tag2label = tag2label_default
 
-## read corpus and get training data
+# read corpus and get training data
 if args.mode != 'demo':
+    # change whlie changing dataset
     train_path = os.path.join('.', args.train_data, 'train_data_en')
+    # change whlie changing dataset
     test_path = os.path.join('.', args.test_data, 'test_data_en')
     train_data = read_corpus(train_path)
     test_data = read_corpus(test_path);
     test_size = len(test_data)
     _, test_data_raw = read_corpus_for_eval(test_path)
 
-## paths setting
+# paths setting
 paths = {}
 timestamp = str(int(time.time())) if args.mode == 'train' else args.demo_model
 output_path = os.path.join('.', args.train_data + "_save", timestamp)
@@ -83,8 +87,9 @@ log_path = os.path.join(result_path, "log.txt")
 paths['log_path'] = log_path
 get_logger(log_path).info(str(args))
 
-## training model
+# training model
 if args.mode == 'train':
+    pickle.dump(tag2label, open(os.path.join(output_path, 'tag2label'), 'wb'))
     model = BiLSTM_CRF(args, embeddings, tag2label, word2id, paths, config=config)
     model.build_graph()
 
@@ -92,8 +97,9 @@ if args.mode == 'train':
     print("train data: {}".format(len(train_data)))
     model.train(train=train_data, dev=test_data)  # use test_data as the dev_data to see overfitting phenomena
 
-## testing model
+# testing model
 elif args.mode == 'test':
+    tag2label = pickle.load(open(os.path.join(output_path, 'tag2label'), 'rb'))
     ckpt_file = tf.train.latest_checkpoint(model_path)
     print(ckpt_file)
     paths['model_path'] = ckpt_file
@@ -106,6 +112,7 @@ elif args.mode == 'test':
 
 ## testing model locally
 elif args.mode == 'local_test':
+    tag2label = pickle.load(open(os.path.join(output_path, 'tag2label'), 'rb'))
     ckpt_file = tf.train.latest_checkpoint(model_path)
     print(ckpt_file)
     paths['model_path'] = ckpt_file
@@ -121,24 +128,83 @@ elif args.mode == 'local_test':
 
 ## demo
 elif args.mode == 'demo':
+    tag2label = pickle.load(open(os.path.join(output_path, 'tag2label'), 'rb'))
     ckpt_file = tf.train.latest_checkpoint(model_path)
     print(ckpt_file)
     paths['model_path'] = ckpt_file
     model = BiLSTM_CRF(args, embeddings, tag2label, word2id, paths, config=config)
     model.build_graph()
     saver = tf.train.Saver()
+    print(tag2label)
+    keyset = set()
+
+    for key in list(tag2label.keys()):
+        if key == 'O':
+            continue
+        keyset.add(key[2:])
+
     with tf.Session(config=config) as sess:
         print('============= demo =============')
         saver.restore(sess, ckpt_file)
-        while (1):
-            print('Please input your sentence:')
-            demo_sent = input()
-            if demo_sent == '' or demo_sent.isspace():
-                print('See you next time!')
-                break
-            else:
-                demo_sent = list(demo_sent.strip())
-                demo_data = [(demo_sent, ['O'] * len(demo_sent))]
-                tag = model.demo_one(sess, demo_data)
-                PER, LOC, ORG, COM, PRO = get_entity(tag, demo_sent)
-                print('PER: {}\nLOC: {}\nORG: {}\nCOM: {}\nPRO: {}'.format(PER, LOC, ORG, COM, PRO))
+        if args.lang == 'zh':
+            while (1):
+                print('Please input your sentence:')
+                demo_sent = input()
+                if demo_sent == '' or demo_sent.isspace():
+                    print('See you next time!')
+                    break
+                else:
+                    demo_sent = list(demo_sent.strip())
+                    demo_data = [(demo_sent, ['O'] * len(demo_sent))]
+                    print(demo_data)
+                    tag = model.demo_one(sess, demo_data)
+                    print(tag)
+                    # PER, LOC, ORG, COM, PRO = get_entity(tag, demo_sent)
+                    # print('PER: {}\nLOC: {}\nORG: {}\nCOM: {}\nPRO: {}'.format(PER, LOC, ORG, COM, PRO))
+
+        elif args.lang == 'en':
+            while (1):
+                print('Please input your sentence:')
+                sent = input()
+                if sent == '' or sent.isspace():
+                    print('See you next time!')
+                    break
+                else:
+                    sent = list(sent.strip().split(' '))
+                    demo_sent = []
+                    for word in sent:
+                        if word.isspace():
+                            continue
+                        demo_sent.append(word.strip().lower())
+                    demo_data = [(demo_sent, ['O'] * len(demo_sent))]
+                    tag = model.demo_one(sess, demo_data)
+                    output_list = []
+                    for w, t in zip(demo_sent, tag):
+                        output_list.append([w, t])
+
+                    print(output_list)
+                    # for key in keyset:
+                    #     entity = get_entity_of_one_type(tag, demo_sent, key)
+                    #     print(key)
+                    #     print(entity)
+
+
+
+elif args.mode == 'atom':
+    sent = input()
+    sent = list(sent.strip().split(' '))
+    demo_sent = []
+    print(sent)
+    for word in sent:
+        if word.isspace():
+            continue
+        demo_sent.append(word.strip().lower())
+
+    print(demo_sent)
+    # keyset = set()
+    # for key in list(tag2label.keys()):
+    #     if key == 'O':
+    #         continue
+    #     keyset.add(key[2:])
+    #
+    # print(keyset)

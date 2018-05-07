@@ -1,14 +1,15 @@
 import sys, pickle, os, random
 import numpy as np
+import pickle
 
 ## tags, BIO
 tag2label = {"O": 0,
              "B-PER": 1, "I-PER": 2,
              "B-LOC": 3, "I-LOC": 4,
              "B-ORG": 5, "I-ORG": 6,
-             "B-COM": 7, "I-COM": 8,
-             "B-PRO": 9, "I-PRO": 10,
-             "B-MISC": 11, "I-MISC": 12
+             # "B-COM": 7, "I-COM": 8,
+             # "B-PRO": 9, "I-PRO": 10,
+             # "B-MISC": 11, "I-MISC": 12
              }
 
 
@@ -252,16 +253,18 @@ def batch_yield(data, batch_size, vocab, tag2label, shuffle=False, lang=None):
 
 
 if __name__ == '__main__':
-    # vocab_build_en('word2id_en.pkl','train_data_en')
-    raw = read_corpus('train_data_en')
-    tag_set = set()
-    for _, tag_ in raw:
-        for tag in tag_:
-            tag_set.add(tag)
-    tag_dict = {}
-    new_id = 1
-    for tag in tag_set:
-        tag_dict[tag] = new_id
-        new_id += 1
-
-    print(tag_dict)
+    # pickle.dump(tag2label, open('tag2label', 'wb'))
+    print(pickle.load(open('tag2label', 'rb')))
+    # # vocab_build_en('word2id_en.pkl','train_data_en')
+    # raw = read_corpus('train_data_en')
+    # tag_set = set()
+    # for _, tag_ in raw:
+    #     for tag in tag_:
+    #         tag_set.add(tag)
+    # tag_dict = {}
+    # new_id = 1
+    # for tag in tag_set:
+    #     tag_dict[tag] = new_id
+    #     new_id += 1
+    #
+    # print(tag_dict)

@@ -11,6 +11,29 @@ def str2bool(v):
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
 
+def get_entity_of_one_type(tag_seq, char_seq, type):
+    length = len(char_seq)
+    ENTITY = []
+    for i, (char, tag) in enumerate(zip(char_seq, tag_seq)):
+        if tag == 'B-' + type.upper():
+            if type.lower() in locals().keys():
+                ENTITY.append(entity)
+                del entity
+            entity = char
+            if i + 1 == length:
+                ENTITY.append(entity)
+        if tag == 'I-' + type.upper():
+            entity += char
+            if i + 1 == length:
+                ENTITY.append(entity)
+        if tag not in ['I-' + type.upper(), 'B-' + type.upper()]:
+            if type.lower() in locals().keys():
+                ENTITY.append(entity)
+                del entity
+            continue
+    return ENTITY
+
+
 def get_entity(tag_seq, char_seq):
     PER = get_PER_entity(tag_seq, char_seq)
     LOC = get_LOC_entity(tag_seq, char_seq)

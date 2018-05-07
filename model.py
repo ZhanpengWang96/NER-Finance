@@ -340,14 +340,15 @@ class BiLSTM_CRF(object):
         # print(label_list[0])
         # print('/n')
         # print(test_data[0])
+        lable2tag = {v:k for k,v in self.tag2label.items()}
 
         for labels_pre, (_, lables_true) in zip(label_list, test_data):
             for pre_l, true_l in zip(labels_pre, lables_true):
-                if pre_l != 0:
+                if lable2tag[pre_l] != 'O':
                     marked_pre += 1
-                if self.tag2label[true_l] != 0:
+                if true_l != 'O':
                     marked_true += 1
-                if pre_l == self.tag2label[true_l] and pre_l != 0:
+                if pre_l == self.tag2label[true_l] and true_l != 'O':
                     marked_right += 1
 
         return marked_pre, marked_right, marked_true
